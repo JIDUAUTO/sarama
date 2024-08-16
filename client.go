@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -134,10 +135,39 @@ type client struct {
 	lock sync.RWMutex // protects access to the maps that hold cluster state.
 }
 
-// NewClient creates a new Client. It connects to one of the given broker addresses
+var (
+	done uint32
+	mtx  sync.Mutex
+	cli  Client // 对于filebeat来说，每个进程只连接一个kafka集群，不需要创建多个Client
+)
+
+func NewClient(addrs []string, conf *Config) (Client, error) {
+	if atomic.LoadUint32(&done) == 1 {
+		if !cli.Closed() {
+			return cli, nil
+		}
+	}
+
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if done == 1 {
+		return cli, nil
+	}
+
+	var err error
+	cli, err = New(addrs, conf)
+	if err == nil {
+		atomic.StoreUint32(&done, 1)
+	}
+
+	return cli, err
+}
+
+// New creates a new Client. It connects to one of the given broker addresses
 // and uses that broker to automatically fetch metadata on the rest of the kafka cluster. If metadata cannot
 // be retrieved from any of the given broker addresses, the client is not created.
-func NewClient(addrs []string, conf *Config) (Client, error) {
+func New(addrs []string, conf *Config) (Client, error) {
 	Logger.Println("Initializing new client")
 
 	if conf == nil {
@@ -232,34 +262,35 @@ func (client *client) InitProducerID() (*InitProducerIDResponse, error) {
 }
 
 func (client *client) Close() error {
-	if client.Closed() {
-		// Chances are this is being called from a defer() and the error will go unobserved
-		// so we go ahead and log the event in this case.
-		Logger.Printf("Close() called on already closed client")
-		return ErrClosedClient
-	}
-
-	// shutdown and wait for the background thread before we take the lock, to avoid races
-	close(client.closer)
-	<-client.closed
-
-	client.lock.Lock()
-	defer client.lock.Unlock()
-	Logger.Println("Closing Client")
-
-	for _, broker := range client.brokers {
-		safeAsyncClose(broker)
-	}
-
-	for _, broker := range client.seedBrokers {
-		safeAsyncClose(broker)
-	}
-
-	client.brokers = nil
-	client.metadata = nil
-	client.metadataTopics = nil
-
 	return nil
+	// if client.Closed() {
+	// 	// Chances are this is being called from a defer() and the error will go unobserved
+	// 	// so we go ahead and log the event in this case.
+	// 	Logger.Printf("Close() called on already closed client")
+	// 	return ErrClosedClient
+	// }
+	//
+	// // shutdown and wait for the background thread before we take the lock, to avoid races
+	// close(client.closer)
+	// <-client.closed
+	//
+	// client.lock.Lock()
+	// defer client.lock.Unlock()
+	// Logger.Println("Closing Client")
+	//
+	// for _, broker := range client.brokers {
+	// 	safeAsyncClose(broker)
+	// }
+	//
+	// for _, broker := range client.seedBrokers {
+	// 	safeAsyncClose(broker)
+	// }
+	//
+	// client.brokers = nil
+	// client.metadata = nil
+	// client.metadataTopics = nil
+	//
+	// return nil
 }
 
 func (client *client) Closed() bool {
