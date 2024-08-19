@@ -389,8 +389,8 @@ func (b *Broker) FetchOffset(request *OffsetFetchRequest) (*OffsetFetchResponse,
 func (b *Broker) JoinGroup(request *JoinGroupRequest) (*JoinGroupResponse, error) {
 	response := new(JoinGroupResponse)
 
-	b.addJoinGroupRequest()
 	err := b.sendAndReceive(request, response)
+	b.addJoinGroupRequest()
 	if err != nil {
 		return nil, err
 	}
@@ -1424,9 +1424,7 @@ func (b *Broker) updateOutgoingCommunicationMetrics(bytes int) {
 }
 
 func (b *Broker) addJoinGroupRequest() {
-	if b.joinGroupRequest != nil {
-		b.joinGroupRequest.Inc(1)
-	}
+	b.joinGroupRequest.Inc(1)
 	if b.brokerJoinGroupRequest != nil {
 		b.brokerJoinGroupRequest.Inc(1)
 	}
