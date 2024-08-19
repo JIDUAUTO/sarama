@@ -389,6 +389,7 @@ func (b *Broker) FetchOffset(request *OffsetFetchRequest) (*OffsetFetchResponse,
 func (b *Broker) JoinGroup(request *JoinGroupRequest) (*JoinGroupResponse, error) {
 	response := new(JoinGroupResponse)
 
+	b.addJoinGroupRequest()
 	err := b.sendAndReceive(request, response)
 	if err != nil {
 		return nil, err
