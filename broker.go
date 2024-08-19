@@ -1423,7 +1423,9 @@ func (b *Broker) updateOutgoingCommunicationMetrics(bytes int) {
 }
 
 func (b *Broker) addJoinGroupRequest() {
-	b.joinGroupRequest.Inc(1)
+	if b.joinGroupRequest != nil {
+		b.joinGroupRequest.Inc(1)
+	}
 }
 
 func (b *Broker) registerMetrics() {
