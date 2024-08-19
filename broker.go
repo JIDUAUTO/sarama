@@ -49,6 +49,7 @@ type Broker struct {
 	brokerResponseRate     metrics.Meter
 	brokerResponseSize     metrics.Histogram
 	brokerRequestsInFlight metrics.Counter
+	joinGroupRequest       metrics.Counter
 
 	kerberosAuthenticator GSSAPIKerberosAuth
 }
@@ -386,6 +387,7 @@ func (b *Broker) FetchOffset(request *OffsetFetchRequest) (*OffsetFetchResponse,
 func (b *Broker) JoinGroup(request *JoinGroupRequest) (*JoinGroupResponse, error) {
 	response := new(JoinGroupResponse)
 
+	b.addJoinGroupRequest()
 	err := b.sendAndReceive(request, response)
 	if err != nil {
 		return nil, err
@@ -1021,14 +1023,14 @@ func (b *Broker) sendAndReceiveSASLHandshake(saslType SASLMechanism, version int
 // In SASL Plain, Kafka expects the auth header to be in the following format
 // Message format (from https://tools.ietf.org/html/rfc4616):
 //
-//   message   = [authzid] UTF8NUL authcid UTF8NUL passwd
-//   authcid   = 1*SAFE ; MUST accept up to 255 octets
-//   authzid   = 1*SAFE ; MUST accept up to 255 octets
-//   passwd    = 1*SAFE ; MUST accept up to 255 octets
-//   UTF8NUL   = %x00 ; UTF-8 encoded NUL character
+//	message   = [authzid] UTF8NUL authcid UTF8NUL passwd
+//	authcid   = 1*SAFE ; MUST accept up to 255 octets
+//	authzid   = 1*SAFE ; MUST accept up to 255 octets
+//	passwd    = 1*SAFE ; MUST accept up to 255 octets
+//	UTF8NUL   = %x00 ; UTF-8 encoded NUL character
 //
-//   SAFE      = UTF1 / UTF2 / UTF3 / UTF4
-//                  ;; any UTF-8 encoded Unicode character except NUL
+//	SAFE      = UTF1 / UTF2 / UTF3 / UTF4
+//	               ;; any UTF-8 encoded Unicode character except NUL
 //
 // With SASL v0 handshake and auth then:
 // When credentials are valid, Kafka returns a 4 byte array of null characters.
@@ -1419,6 +1421,10 @@ func (b *Broker) updateOutgoingCommunicationMetrics(bytes int) {
 	}
 }
 
+func (b *Broker) addJoinGroupRequest() {
+	b.joinGroupRequest.Inc(1)
+}
+
 func (b *Broker) registerMetrics() {
 	b.brokerIncomingByteRate = b.registerMeter("incoming-byte-rate")
 	b.brokerRequestRate = b.registerMeter("request-rate")
@@ -1428,6 +1434,7 @@ func (b *Broker) registerMetrics() {
 	b.brokerResponseRate = b.registerMeter("response-rate")
 	b.brokerResponseSize = b.registerHistogram("response-size")
 	b.brokerRequestsInFlight = b.registerCounter("requests-in-flight")
+	b.joinGroupRequest = b.registerCounter("join-group")
 }
 
 func (b *Broker) unregisterMetrics() {
